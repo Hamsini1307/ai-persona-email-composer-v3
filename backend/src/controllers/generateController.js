@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Persona = require("../models/Persona");
 const { genAI, MODEL_NAME } = require("../config/gemini");
+const requestCounts={};
 
 function isValidObjectId(id) {
   return mongoose.Types.ObjectId.isValid(id);
@@ -43,6 +44,30 @@ function buildUserPrompt(rawEmail, objective) {
 exports.generateEmailResponse = async (req, res) => {
   try {
     const { personaId, raw_email, objective } = req.body;
+    const ip = req.ip;
+
+if (!requestCounts[ip]) {
+  requestCounts[ip] = {
+    count: 0,
+    startTime: Date.now(),
+  };
+}
+
+if (Date.now() - requestCounts[ip].startTime > 60 * 60 * 1000) {
+  requestCounts[ip] = {
+    count: 0,
+    startTime: Date.now(),
+  };
+}
+
+if (requestCounts[ip].count >= 10) {
+  return res.status(429).json({
+    success: false,
+    message: "Too many requests. Please try again after one hour.",
+  });
+}
+
+requestCounts[ip].count++;
 
     // --- Input validation ---
     if (!personaId || !isValidObjectId(personaId)) {
@@ -81,7 +106,7 @@ exports.generateEmailResponse = async (req, res) => {
       contents: [{ role: "user", parts: [{ text: userPrompt }] }],
       generationConfig: {
         temperature: 0.7,
-        maxOutputTokens: 1024,
+        maxOutputTokens: 2048,
       },
     });
 
